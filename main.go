@@ -41,6 +41,13 @@ func (img ImageCache) Tags() map[string]interface{} {
 
 func (img ImageCache) AddTag(name string, value string) error {
 
+	if name == "" {
+		return errors.New("name required")
+	}
+	if value == "" {
+		return errors.New("value required")
+	}
+
 	if img.tags[name] != nil {
 		return errors.New(fmt.Sprintf("Tag %v already exists", name))
 	}
@@ -56,7 +63,36 @@ func (img ImageCache) AddTag(name string, value string) error {
 	return nil
 }
 
+func (img ImageCache) RemoveTag(name string) error {
+
+	if name == "" {
+		return errors.New("name required")
+	}
+
+	if img.tags[name] == nil {
+		return errors.New(fmt.Sprintf("Tag %v does not exist", name))
+	}
+
+	out, err := callTool(fmt.Sprintf("-%v=", name), img.filepath)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("%v: %v", err, out))
+	}
+
+	delete(img.tags, name)
+
+	return nil
+}
+
 func (img ImageCache) AddTagValue(name string, value string) error {
+
+	if name == "" {
+		return errors.New("name required")
+	}
+	if value == "" {
+		return errors.New("value required")
+	}
+
 	current := img.tags[name]
 
 	var vals []string
@@ -87,29 +123,50 @@ func (img ImageCache) AddTagValue(name string, value string) error {
 	return nil
 }
 
+func (img ImageCache) RemoveTagValue(name string, value string) error {
+
+	if name == "" {
+		return errors.New("name required")
+	}
+	if value == "" {
+		return errors.New("value required")
+	}
+
+	current := img.tags[name]
+
+	var vals []string
+
+	if(current == nil) {
+		return errors.New(fmt.Sprintf("Tag not found: %v", name))
+	} else {
+
+		switch v := current.(type) {
+		default:
+			return errors.New(fmt.Sprintf("unexpected tag type %T", v))
+		case string:
+			vals = []string{current.(string)}
+		case []string:
+			vals = current.([]string)
+		}
+	}
+
+	out, err := callTool(fmt.Sprintf("-%v+=%v", name, value), img.filepath)
+
+	if err != nil {
+		return errors.New(fmt.Sprintf("%v: %v", err, out))
+	}
+
+	vals = append(vals, value)
+	img.tags[name] = vals
+
+	return nil
+}
+
+
 func callTool(args ...string) (string, error) {
 
 	cmdName := "exiftool"
 	cmdOut, err := exec.Command(cmdName, args...).CombinedOutput()
 
 	return string(cmdOut), err
-}
-
-func main() {
-	img, err := NewImage("/tmp/1.jpg")
-
-	if err != nil {
-		fmt.Print(err)
-	}
-
-	//fmt.Println(img.Tags())
-
-	err = img.AddTagValue("Keywords", "blah2")
-
-	if err != nil {
-		fmt.Println("error")
-		fmt.Println(err)
-	}
-
-	//fmt.Println(img.Tags())
 }
