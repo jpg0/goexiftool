@@ -1,4 +1,4 @@
-package main
+package goexiftool
 
 import (
 	"os/exec"
@@ -11,6 +11,10 @@ type Image interface {
 	Tags() map[string]interface{}
 	AddTag(name string, value string) error
 	AddTagValue(name string, value string) error
+	RemoveTagValue(name string, value string) error
+	StringSlice(name string) ([]string, error)
+	String(name string) (string, error)
+	RemoveTag(name string) error
 }
 
 type ImageCache struct {
@@ -32,11 +36,45 @@ func NewImage(filepath string) (Image, error) {
 		return nil, err
 	}
 
+	clean(tags[0])
+
 	return &ImageCache{filepath:filepath,tags:tags[0]}, nil
 }
 
 func (img ImageCache) Tags() map[string]interface{} {
 	return img.tags
+}
+
+func (img ImageCache) String(name string) (string, error) {
+	current := img.tags[name]
+
+	if current == nil {
+		return "", nil
+	}
+
+	switch v := current.(type) {
+	default:
+		return "", errors.New(fmt.Sprintf("unexpected tag type %T", v))
+	case string:
+		return current.(string), nil
+	}
+}
+
+func (img ImageCache) StringSlice(name string) ([]string, error) {
+	current := img.tags[name]
+
+	if current == nil {
+		return []string{}, nil
+	}
+
+	switch v := current.(type) {
+	default:
+		return nil, errors.New(fmt.Sprintf("unexpected tag type %T", v))
+	case string:
+		return  []string{current.(string)}, nil
+	case []string:
+		return  current.([]string), nil
+	}
 }
 
 func (img ImageCache) AddTag(name string, value string) error {
@@ -139,7 +177,6 @@ func (img ImageCache) RemoveTagValue(name string, value string) error {
 	if(current == nil) {
 		return errors.New(fmt.Sprintf("Tag not found: %v", name))
 	} else {
-
 		switch v := current.(type) {
 		default:
 			return errors.New(fmt.Sprintf("unexpected tag type %T", v))
@@ -150,18 +187,33 @@ func (img ImageCache) RemoveTagValue(name string, value string) error {
 		}
 	}
 
-	out, err := callTool(fmt.Sprintf("-%v+=%v", name, value), img.filepath)
+	out, err := callTool(fmt.Sprintf("-%v-=%v", name, value), img.filepath)
 
 	if err != nil {
 		return errors.New(fmt.Sprintf("%v: %v", err, out))
 	}
 
-	vals = append(vals, value)
+	for i, v := range vals {
+		if v == value {
+			vals = append(vals[:i], vals[i+1:]...)
+			break
+		}
+	}
+
 	img.tags[name] = vals
 
 	return nil
 }
 
+func clean(m map[string]interface{}) {
+	for k, v := range m {
+		if is, ok := v.([]interface{}); ok {
+			ss := make([]string, len(is))
+			for i, s := range is { ss[i] = s.(string) }
+			m[k] = ss
+		}
+	}
+}
 
 func callTool(args ...string) (string, error) {
 
