@@ -209,7 +209,9 @@ func clean(m map[string]interface{}) {
 	for k, v := range m {
 		if is, ok := v.([]interface{}); ok {
 			ss := make([]string, len(is))
-			for i, s := range is { ss[i] = s.(string) }
+			for i, s := range is {
+				ss[i] = fmt.Sprintf("%v", s)
+			}
 			m[k] = ss
 		}
 	}
